@@ -236,16 +236,25 @@ export default function HomePage({ onLogin }: HomePageProps) {
           <div className="flex items-center justify-between h-16">
             {/* Left side - Both Logos */}
             <div className="flex items-center space-x-4">
-              <img
-                src="/EDC.png"
-                alt="EDC"
-                className="h-8 w-auto"
-              />
-              <img
-                src="/logoclick.png"
-                alt="NORTHLINE"
-                className="h-8 w-auto"
-              />
+              <a href="#home" aria-label="Go to HOME">
+                <img
+                  src="/EDC.png"
+                  alt="EASYDRIVE"
+                  className="h-8 w-auto hover:opacity-90 transition-opacity"
+                />
+              </a>
+              <a
+                href="https://www.northlineautotransport.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Visit North Line Auto Transport"
+              >
+                <img
+                  src="/logoclick.png"
+                  alt="North Line Auto Transport"
+                  className="h-8 w-auto hover:opacity-90 transition-opacity"
+                />
+              </a>
             </div>
             
             {/* Center - Navigation Links (Desktop) */}
@@ -811,7 +820,7 @@ export default function HomePage({ onLogin }: HomePageProps) {
       <footer className="bg-gray-900 text-gray-400 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <Truck className="w-6 h-6 text-cyan-500" />
+            <img src="/EDC.png" alt="EASYDRIVE" className="h-6 w-auto sm:h-7" />
             <span className="text-lg font-bold text-white">EASYDRIVE TRANSPORTATION PORTAL</span>
           </div>
           <p>&copy; 2024 EasyDrive Transportation. All rights reserved.</p>
