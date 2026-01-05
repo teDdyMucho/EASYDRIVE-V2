@@ -218,9 +218,36 @@ export default function ReceiptHistory({ onBack }: ReceiptHistoryProps) {
           .filter((r) => r.id && r.text);
 
         const localNow = localKey ? readLocalReceipts(localKey) : [];
-        const dedup = new Map<string, ReceiptEntry>();
-        for (const r of [...remote, ...localNow]) dedup.set(r.id, r);
-        const next = Array.from(dedup.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+        // Build a map keyed by normalized receipt text to avoid duplicates when
+        // the local temp ID differs from the remote Supabase row ID.
+        const norm = (s: string) => s.replace(/\r/g, '').trim();
+        type WithSource = ReceiptEntry & { __src: 'remote' | 'local' };
+        const byText = new Map<string, WithSource>();
+
+        // Prefer remote entries when texts collide; otherwise, keep the newest createdAt
+        const consider = (rec: WithSource) => {
+          const key = norm(rec.text);
+          const existing = byText.get(key);
+          if (!existing) {
+            byText.set(key, rec);
+            return;
+          }
+          if (existing.__src === 'remote' && rec.__src === 'local') return;
+          if (existing.__src === 'local' && rec.__src === 'remote') {
+            byText.set(key, rec);
+            return;
+          }
+          // same source; keep the most recent
+          byText.set(key, new Date(rec.createdAt) > new Date(existing.createdAt) ? rec : existing);
+        };
+
+        remote.forEach((r) => consider({ ...r, __src: 'remote' }));
+        localNow.forEach((r) => consider({ ...r, __src: 'local' }));
+
+        const next = Array.from(byText.values())
+          .map(({ __src, ...rest }) => rest)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
         if (isMounted) setReceipts(next);
       } catch (err) {
@@ -244,23 +271,49 @@ export default function ReceiptHistory({ onBack }: ReceiptHistoryProps) {
 
   const deleteReceiptConfirmed = async (id: string) => {
     const localKey = userKey ? `${STORAGE_RECEIPTS_BY_USER_PREFIX}${userKey}` : null;
-    if (localKey) removeLocalReceiptById(localKey, id);
-    removeLocalReceiptById(STORAGE_RECEIPTS_PENDING, id);
+    const target = receipts.find((r) => r.id === id);
+    const normalize = (s: string) => s.replace(/\r/g, '').trim();
+    const normText = target ? normalize(target.text) : null;
 
+    // Optimistic remove from UI: drop any entries with the same normalized text
+    if (normText) {
+      setReceipts((prev) => prev.filter((r) => normalize(r.text) !== normText));
+    } else {
+      setReceipts((prev) => prev.filter((r) => r.id !== id));
+    }
+
+    // Clear selection if it was open
+    if (selectedReceiptId === id) {
+      setSelectedReceiptId(null);
+      setReceiptCopied(false);
+    }
+
+    // Remove from local storage by id and by text to prevent reappearing
+    try {
+      if (localKey) removeLocalReceiptById(localKey, id);
+      removeLocalReceiptById(STORAGE_RECEIPTS_PENDING, id);
+      if (normText) {
+        const purgeByText = (key: string) => {
+          const existing = readLocalReceipts(key);
+          const next = existing.filter((r) => normalize(r.text) !== normText);
+          writeLocalReceipts(key, next);
+        };
+        if (localKey) purgeByText(localKey);
+        purgeByText(STORAGE_RECEIPTS_PENDING);
+      }
+    } catch {
+      // ignore
+    }
+
+    // Remote delete (best-effort)
     if (userEmail && supabase) {
       try {
         const { error } = await supabase.from('Document').delete().eq('id', id).eq('email', userEmail);
         if (error) throw error;
       } catch {
-        // ignore
+        // ignore network/db errors; UI already updated
       }
     }
-
-    if (selectedReceiptId === id) {
-      setSelectedReceiptId(null);
-      setReceiptCopied(false);
-    }
-    setReceiptsVersion((v) => v + 1);
   };
 
   return (

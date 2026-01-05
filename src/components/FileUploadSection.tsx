@@ -17,6 +17,8 @@ interface UploadedFile {
 interface FileUploadSectionProps {
   hideHeader?: boolean;
   onContinueToSignIn?: () => void;
+  // Called when user closes the receipt modal to return to the main page
+  onCloseUpload?: () => void;
 }
 
 type ReceiptEntry = {
@@ -261,7 +263,7 @@ const getOfficialCityPriceForAddress = (address: string | null | undefined) => {
   return null;
 };
 
-export default function FileUploadSection({ hideHeader = false, onContinueToSignIn }: FileUploadSectionProps) {
+export default function FileUploadSection({ hideHeader = false, onContinueToSignIn, onCloseUpload }: FileUploadSectionProps) {
   const STORAGE_FORM = 'ed_extractedFormData';
   const STORAGE_MESSAGE = 'ed_submitMessage';
   const STORAGE_ERROR = 'ed_submitError';
@@ -1622,6 +1624,7 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
               setReceiptText(null);
               setReceiptCopied(false);
               setFormData(null);
+              onCloseUpload?.();
             }
           }}
         >
@@ -1681,6 +1684,7 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
                       setReceiptText(null);
                       setReceiptCopied(false);
                       setFormData(null);
+                      onCloseUpload?.();
                     }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close"
@@ -1773,30 +1777,32 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
                 <div className="text-sm text-gray-500">You can close this receipt and upload a new document.</div>
                 <div className="flex flex-col sm:flex-row gap-3">
                   {!isLoggedIn && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsReceiptOpen(false);
-                        setReceiptText(null);
-                        setReceiptCopied(false);
-                      }}
-                      className="inline-flex justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
-                    >
-                      Back
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsReceiptOpen(false);
+                          setReceiptText(null);
+                          setReceiptCopied(false);
+                        }}
+                        className="inline-flex justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsReceiptOpen(false);
+                          setReceiptText(null);
+                          setReceiptCopied(false);
+                          onContinueToSignIn?.();
+                        }}
+                        className="inline-flex justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
+                      >
+                        Continue
+                      </button>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsReceiptOpen(false);
-                      setReceiptText(null);
-                      setReceiptCopied(false);
-                      if (!isLoggedIn) onContinueToSignIn?.();
-                    }}
-                    className="inline-flex justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
-                  >
-                    {isLoggedIn ? 'Close' : 'Continue'}
-                  </button>
                 </div>
               </div>
             </div>
