@@ -25,6 +25,49 @@ type ReceiptEntry = {
   text: string;
 };
 
+// Helpers to parse values directly from the generated receipt text as a fallback
+const extractTransactionIdFromText = (text: string): string | null => {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const patterns = [
+    /\btransaction\s*id\s*[:#-]?\s*([A-Za-z0-9._-]+)/i,
+    /\btxn\s*id\s*[:#-]?\s*([A-Za-z0-9._-]+)/i,
+    /\btransaction\s*#\s*[:#-]?\s*([A-Za-z0-9._-]+)/i,
+  ];
+  for (const line of lines) {
+    for (const re of patterns) {
+      const m = line.match(re);
+      if (m?.[1]) return m[1].trim();
+    }
+  }
+  return null;
+};
+
+const extractAddressFromSection = (text: string, sectionNames: string[]): string | null => {
+  const lines = text.split(/\r?\n/);
+  const isHeader = (s: string) =>
+    sectionNames.some((name) => new RegExp(`^\\s*${name}\\s*:`, 'i').test(s.trim())) ||
+    sectionNames.some((name) => new RegExp(`^\\s*${name}\\b`, 'i').test(s.trim()));
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (isHeader(lines[i])) { start = i; break; }
+  }
+  if (start === -1) return null;
+  for (let i = start + 1; i < lines.length; i++) {
+    const cur = lines[i].trim();
+    if (!cur) break;
+    if (/^(pickup|pick\s*up|dropoff|drop-off|drop\s*off|transaction)\b/i.test(cur)) break;
+    const m = cur.match(/^(?:address|adress|addr)\s*[:#-]\s*(.+)$/i);
+    if (m?.[1]) return m[1].trim();
+  }
+  return null;
+};
+
+const extractPickupAddressFromText = (text: string) =>
+  extractAddressFromSection(text, ['pickup location', 'pickup', 'pick up']);
+
+const extractDropoffAddressFromText = (text: string) =>
+  extractAddressFromSection(text, ['dropoff location', 'drop-off location', 'drop off location', 'dropoff', 'drop-off', 'drop off']);
+
 type ServiceType = 'pickup_one_way' | 'delivery_one_way';
 type VehicleType = 'standard';
 
@@ -1062,16 +1105,15 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
     );
   };
 
-  const updateFormField = <S extends keyof FormData>(section: S, key: keyof FormData[S] & string, value: string) => {
+  // Update a nested field in FormData safely (only spreads when it's an object)
+  const updateFormField = <K extends keyof FormData>(section: K, key: string, value: string) => {
     setFormData((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        [section]: {
-          ...(prev[section] ?? {}),
-          [key]: value,
-        },
-      };
+      const current = prev[section] as unknown;
+      const sectionObj: Record<string, unknown> =
+        current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
+      sectionObj[key] = value;
+      return { ...prev, [section]: sectionObj } as FormData;
     });
   };
 
@@ -1423,7 +1465,6 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
       setSubmitError(false);
 
       clearPersisted();
-      setFormData(null);
       setUploadedFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
@@ -1580,6 +1621,7 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
               setIsReceiptOpen(false);
               setReceiptText(null);
               setReceiptCopied(false);
+              setFormData(null);
             }
           }}
         >
@@ -1638,6 +1680,7 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
                       setIsReceiptOpen(false);
                       setReceiptText(null);
                       setReceiptCopied(false);
+                      setFormData(null);
                     }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 text-white hover:bg-white/20 transition-colors"
                     aria-label="Close"
@@ -1657,11 +1700,16 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
 
                 const pickupName = String(formData?.pickup_location?.name ?? '').trim();
                 const pickupPhone = String(formData?.pickup_location?.phone ?? '').trim();
-                const pickupAddress = String(formData?.pickup_location?.address ?? '').trim();
+                const rawPickupAddr = String(formData?.pickup_location?.address ?? '').trim();
                 const dropName = String(formData?.dropoff_location?.name ?? '').trim();
                 const dropPhone = String(formData?.dropoff_location?.phone ?? '').trim();
-                const dropAddress = String(formData?.dropoff_location?.address ?? '').trim();
-                const txnId = String(formData?.transaction?.transaction_id ?? '').trim();
+                const rawDropAddr = String(formData?.dropoff_location?.address ?? '').trim();
+                const rawTxnId = String(formData?.transaction?.transaction_id ?? '').trim();
+
+                const textForParse = String(receiptText ?? '');
+                const pickupAddress = rawPickupAddr || extractPickupAddressFromText(textForParse) || '';
+                const dropAddress = rawDropAddr || extractDropoffAddressFromText(textForParse) || '';
+                const txnId = rawTxnId || extractTransactionIdFromText(textForParse) || '';
 
                 return (
                   <div className="space-y-6">
@@ -1692,15 +1740,15 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700">
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <div className="text-xs font-medium text-gray-500">Pickup</div>
-                          <div className="mt-1 font-semibold text-gray-900">{pickupName || '—'}</div>
+                          <div className="mt-1 font-semibold text-gray-900">{pickupName || pickupAddress || '—'}</div>
                           {pickupPhone && <div className="mt-1">{pickupPhone}</div>}
-                          {pickupAddress && <div className="mt-1 text-gray-600">{pickupAddress}</div>}
+                          {pickupAddress && pickupName && <div className="mt-1 text-gray-600">{pickupAddress}</div>}
                         </div>
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <div className="text-xs font-medium text-gray-500">Drop-off</div>
-                          <div className="mt-1 font-semibold text-gray-900">{dropName || '—'}</div>
+                          <div className="mt-1 font-semibold text-gray-900">{dropName || dropAddress || '—'}</div>
                           {dropPhone && <div className="mt-1">{dropPhone}</div>}
-                          {dropAddress && <div className="mt-1 text-gray-600">{dropAddress}</div>}
+                          {dropAddress && dropName && <div className="mt-1 text-gray-600">{dropAddress}</div>}
                         </div>
                         <div className="rounded-lg bg-white border border-gray-200 p-3 sm:col-span-2">
                           <div className="text-xs font-medium text-gray-500">Transaction ID</div>
