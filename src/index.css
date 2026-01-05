@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.floating {
+  animation: float 6s ease-in-out infinite;
+}
+
+.ocean-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #06b6d4 rgba(255, 255, 255, 0.15);
+}
+
+.ocean-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.ocean-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+.ocean-scrollbar::-webkit-scrollbar-thumb {
+  background: #06b6d4;
+  border-radius: 9999px;
+}
+
+.ocean-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #0891b2;
+}
