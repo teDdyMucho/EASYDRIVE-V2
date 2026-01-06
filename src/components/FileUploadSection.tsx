@@ -731,6 +731,26 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
       : null;
     const authObj = isRecord(output.authorization) ? output.authorization : null;
 
+    // New flat format (from webhook) support
+    const out = output as Record<string, unknown>;
+    const newTxnId = readString(out.transaction_number);
+    const newReleaseDate = readString(out.release_date);
+    const newVehicleYear = readString(out.vehicle_year);
+    const newVehicleMake = readString(out.vehicle_make);
+    const newVehicleModel = readString(out.vehicle_model);
+    const newVehicleTrans = readString(out.vehicle_transmission);
+    const newVehicleCyl = readString(out.vehicle_cylinders);
+    const newVehicleColor = readString(out.vehicle_color);
+    const newVehicleOdoRaw = readString(out.vehicle_odometer);
+    const newVehicleOdo = newVehicleOdoRaw ? newVehicleOdoRaw.replace(/[^0-9.]/g, '') : '';
+    const newPickupName = readString(out.pickup_location_name);
+    const newPickupAddress = readString(out.pickup_location_address);
+    const newPickupPhone = readString(out.pickup_location_phone);
+    const newSellingName = readString(out.selling_dealership_name);
+    const newSellingPhone = readString(out.selling_dealership_phone);
+    const newBuyingName = readString(out.buying_dealership_name);
+    const newBuyingPhone = readString(out.buying_dealership_phone);
+
     const extractedServiceTypeRaw = pickFirstString(
       output.service_type,
       (output as Record<string, unknown>).serviceType,
@@ -803,30 +823,30 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
         vehicle_type: vehicleType,
       },
       vehicle: {
-        vin: readString(vehicleObj?.vin),
-        year: readString(vehicleObj?.year),
-        make: readString(vehicleObj?.make),
-        model: readString(vehicleObj?.model),
-        transmission: readString(vehicleObj?.transmission),
-        odometer_km: readString(vehicleObj?.odometer_km),
-        exterior_color: readString(vehicleObj?.exterior_color),
+        vin: readString(vehicleObj?.vin) || readString(out.vin),
+        year: readString(vehicleObj?.year) || newVehicleYear,
+        make: readString(vehicleObj?.make) || newVehicleMake,
+        model: readString(vehicleObj?.model) || newVehicleModel,
+        transmission: readString(vehicleObj?.transmission) || newVehicleTrans,
+        odometer_km: readString(vehicleObj?.odometer_km) || newVehicleOdo,
+        exterior_color: readString(vehicleObj?.exterior_color) || newVehicleColor,
         interior_color: readString(vehicleObj?.interior_color),
-        has_accident: readString(vehicleObj?.has_accident),
+        has_accident: readString(vehicleObj?.has_accident) || newVehicleCyl,
       },
       selling_dealership: {
-        name: readString(sellingObj?.name),
-        phone: readString(sellingObj?.phone),
+        name: readString(sellingObj?.name) || newSellingName,
+        phone: readString(sellingObj?.phone) || newSellingPhone,
         address: readString(sellingObj?.address),
       },
       buying_dealership: {
-        name: readString(buyingObj?.name),
-        phone: readString(buyingObj?.phone),
+        name: readString(buyingObj?.name) || newBuyingName,
+        phone: readString(buyingObj?.phone) || newBuyingPhone,
         contact_name: readString(buyingObj?.contact_name),
       },
       pickup_location: {
-        name: readString(pickupObj?.name),
-        address: readString(pickupObj?.address),
-        phone: readString(pickupObj?.phone),
+        name: readString(pickupObj?.name) || newPickupName,
+        address: readString(pickupObj?.address) || newPickupAddress,
+        phone: readString(pickupObj?.phone) || newPickupPhone,
       },
       dropoff_location: {
         name: dropoffName,
@@ -837,9 +857,9 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
         service_area: inferredServiceArea,
       },
       transaction: {
-        transaction_id: readString(transactionObj?.transaction_id),
+        transaction_id: readString(transactionObj?.transaction_id) || newTxnId,
         release_form_number: readString(transactionObj?.release_form_number),
-        release_date: readString(transactionObj?.release_date),
+        release_date: readString(transactionObj?.release_date) || newReleaseDate,
         arrival_date: readString(transactionObj?.arrival_date),
       },
       authorization: {
@@ -1357,14 +1377,17 @@ export default function FileUploadSection({ hideHeader = false, onContinueToSign
         }
       })();
 
-      const files = await Promise.all(
-        uploadedFiles.map(async (f) => ({
-          name: f.name,
-          type: f.type,
-          size: f.file.size,
-          base64: await fileToBase64(f.file),
-        }))
-      );
+      // Include files if available (may be empty for manual entry)
+      const files = uploadedFiles.length > 0
+        ? await Promise.all(
+            uploadedFiles.map(async (f) => ({
+              name: f.name,
+              type: f.type,
+              size: f.file.size,
+              base64: await fileToBase64(f.file),
+            }))
+          )
+        : [];
 
       const webhookRes = await fetch('https://primary-production-6722.up.railway.app/webhook/Dox', {
         method: 'POST',
